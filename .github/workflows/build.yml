@@ -6,11 +6,14 @@ on:
   push:
     tags: ["*"]
   workflow_dispatch:
+permissions:
+  contents: write
 env:
   ANKI_TAG: "26.09.2"
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-latest            # arm64
