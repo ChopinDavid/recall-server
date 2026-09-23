@@ -24,6 +24,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install protoc (anki's build generates protobuf code)
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then brew install protobuf
+          else sudo apt-get update && sudo apt-get install -y protobuf-compiler; fi
       - name: Build from ankitects/anki @ ${{ env.ANKI_TAG }}
         run: |
           cargo install --root out --git https://github.com/ankitects/anki.git \

@@ -80,8 +80,11 @@ if [ "$OS" = "Darwin" ]; then
   <key>KeepAlive</key><true/>
 </dict></plist>
 EOF
-  launchctl unload "$PLIST" 2>/dev/null || true
-  launchctl load "$PLIST"
+  UID_N=$(id -u)
+  launchctl bootout "gui/${UID_N}/com.recall.anki-sync-server" 2>/dev/null || true
+  launchctl bootstrap "gui/${UID_N}" "$PLIST"
+  # First spawns under launchd are flaky; kickstart makes it definite.
+  launchctl kickstart -k "gui/${UID_N}/com.recall.anki-sync-server"
 else
   UNIT_DIR="${HOME}/.config/systemd/user"; mkdir -p "$UNIT_DIR"
   cat > "${UNIT_DIR}/recall-anki-sync-server.service" <<EOF
@@ -98,20 +101,25 @@ EOF
 fi
 
 # ---- 4. verify + print the card -------------------------------------------
-sleep 2
+# The address the PHONE should use: the interface carrying the default route,
+# not blindly en0 (which may be an idle second network).
 ADDR=""
 if [ "$OS" = "Darwin" ]; then
-  ADDR=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)
+  DEF_IF=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')
+  [ -n "$DEF_IF" ] && ADDR=$(ipconfig getifaddr "$DEF_IF" 2>/dev/null || true)
+  [ -n "$ADDR" ] || ADDR=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)
 else
   ADDR=$(hostname -I 2>/dev/null | awk '{print $1}')
 fi
 [ -n "$ADDR" ] || ADDR="<your computer's local address>"
 
-if curl -fs -o /dev/null "http://127.0.0.1:${PORT}/" 2>/dev/null || [ "$?" = "22" ]; then
-  RUNNING="yes"
-else
-  RUNNING="maybe"
-fi
+# Give supervision up to ~10s; any HTTP answer (even 404) means it's serving.
+RUNNING="no"
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/" 2>/dev/null || true)
+  if [ -n "$CODE" ] && [ "$CODE" != "000" ]; then RUNNING="yes"; break; fi
+  sleep 1
+done
 
 say ""
 say "==============================================================="
@@ -128,5 +136,5 @@ say "     Then restart Anki, press Sync, and choose Upload."
 say ""
 say "   It starts automatically when you log in."
 say "   Data: ${DATA_DIR}    Log: ${HOME_DIR}/server.log"
-[ "$RUNNING" = "yes" ] || say "   NOTE: could not confirm the server answered yet; check the log."
+[ "$RUNNING" = "yes" ] || say "   NOTE: the server has not answered yet; check ${HOME_DIR}/server.log"
 say "==============================================================="
