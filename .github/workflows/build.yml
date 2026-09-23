@@ -1,0 +1,35 @@
+# Builds anki-sync-server from ankitects/anki (AGPL-3.0) and attaches the
+# binaries to a GitHub Release. Trigger: push a tag matching the anki version
+# being built (e.g. 26.09.2), with ANKI_TAG below kept in step.
+name: build
+on:
+  push:
+    tags: ["*"]
+  workflow_dispatch:
+env:
+  ANKI_TAG: "26.09.2"
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest            # arm64
+            asset: anki-sync-server-macos-arm64
+          - os: macos-15-intel
+            asset: anki-sync-server-macos-x86_64
+          - os: ubuntu-latest
+            asset: anki-sync-server-linux-x86_64
+          - os: ubuntu-24.04-arm
+            asset: anki-sync-server-linux-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build from ankitects/anki @ ${{ env.ANKI_TAG }}
+        run: |
+          cargo install --root out --git https://github.com/ankitects/anki.git \
+            --tag "${{ env.ANKI_TAG }}" anki-sync-server
+          mv out/bin/anki-sync-server "${{ matrix.asset }}"
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ matrix.asset }}
