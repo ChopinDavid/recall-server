@@ -1,0 +1,45 @@
+# Runs setup-server.ps1 end to end on Windows (non-interactively, via the
+# RECALL_SERVER_USER / RECALL_SERVER_PASSWORD overrides) and checks that the
+# server answers, the Scheduled Task and firewall rule exist, and a re-run
+# keeps the credentials. Uses the binary from the latest release.
+name: test-windows-setup
+on:
+  push:
+    paths: ["setup-server.ps1", ".github/workflows/test-windows-setup.yml"]
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse check
+        shell: powershell
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD\setup-server.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { $errors | Format-List; exit 1 }
+      - name: First run
+        shell: cmd
+        env:
+          RECALL_SERVER_USER: ci-user
+          RECALL_SERVER_PASSWORD: "it's $HOME \"q\" a:b=c"
+        run: powershell -ExecutionPolicy Bypass -c "Get-Content -Raw setup-server.ps1 | iex" > first.txt & type first.txt
+      - name: Re-run keeps credentials
+        shell: cmd
+        env:
+          RECALL_SERVER_USER: someone-else
+        run: powershell -ExecutionPolicy Bypass -c "Get-Content -Raw setup-server.ps1 | iex" > second.txt & type second.txt
+      - name: Verify
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $first = Get-Content -Raw first.txt; $second = Get-Content -Raw second.txt
+          if ($first -notmatch 'Your Anki sync server is set up') { throw 'first run did not finish' }
+          if ($first -match 'NOTE: the server has not answered') { throw 'server did not answer' }
+          if ($first -notmatch [regex]::Escape('Password:       it''s $HOME "q" a:b=c')) { throw 'password not preserved' }
+          if ($second -notmatch 'Keeping your existing username/password') { throw 're-run did not keep credentials' }
+          if ($second -notmatch 'Username:       ci-user') { throw 're-run changed the username' }
+          Get-ScheduledTask -TaskName recall-anki-sync-server | Format-List TaskName, State
+          Get-NetFirewallRule -DisplayName 'recall-server (Anki sync)' | Format-List DisplayName, Enabled, Profile
+          try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8080/ | Out-Null } catch { if (-not $_.Exception.Response) { throw 'server not reachable' } }
+          Get-Content "$env:USERPROFILE\.recall-server\server.log" -Tail 20

@@ -6,17 +6,33 @@ the self-hosting companion to
 Anki self-hoster (AnkiDroid, desktop-to-desktop, anything that speaks Anki's
 sync protocol).
 
+**macOS / Linux** — paste into the Terminal app:
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setup-server.sh | sh
 ```
 
-That downloads a prebuilt `anki-sync-server` binary for your machine,
-asks for a username and password, installs it to start at login (launchd on
-macOS, systemd user unit on Linux), starts it, and prints the address,
-username, and password to enter in your apps. Press Enter at either prompt
-to accept the default: your computer's login name, and a random 16-character
-password. Re-running upgrades in place and keeps your credentials and data.
+**Windows** — paste into Command Prompt or PowerShell:
 
+```bat
+powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setup-server.ps1 | iex"
+```
+
+Either one downloads a prebuilt `anki-sync-server` binary for your machine,
+asks for a username and password, installs it to start at login, starts it,
+and prints the address, username, and password to enter in your apps. Press
+Enter at either prompt to accept the default: your computer's login name,
+and a random 16-character password. Re-running upgrades in place and keeps
+your credentials and data.
+
+On Windows, the script also asks once for administrator permission to let
+the server through Windows Firewall (on private networks only), so your
+phone can reach it. `-ExecutionPolicy Bypass` applies to that one command
+only; it doesn't change any setting.
+
+### macOS / Linux details
+
+- Runs as a launchd agent (macOS) or systemd user unit (Linux).
 - Data: `~/.recall-server/data` — back it up like any Anki data.
 - Log: `~/.recall-server/server.log`
 - Change the port: `RECALL_SERVER_PORT=27701 sh setup-server.sh`
@@ -31,6 +47,26 @@ password. Re-running upgrades in place and keeps your credentials and data.
 - Uninstall: remove `~/.recall-server` and the
   `com.recall.anki-sync-server` LaunchAgent / `recall-anki-sync-server`
   systemd unit.
+
+### Windows details
+
+- Runs as the `recall-anki-sync-server` Scheduled Task (at login, restarted
+  if it stops).
+- Data: `%USERPROFILE%\.recall-server\data` — back it up like any Anki data.
+- Log: `%USERPROFILE%\.recall-server\server.log`
+- Change the port or set credentials without prompts: set
+  `RECALL_SERVER_PORT`, `RECALL_SERVER_USER` and `RECALL_SERVER_PASSWORD`
+  first (in Command Prompt: `set RECALL_SERVER_PORT=27701`).
+- Change credentials later: edit `SYNC_USER1=` in
+  `%USERPROFILE%\.recall-server\server-env`, or delete that file and re-run.
+- If your phone can't connect, check that Windows treats your network as
+  **Private** (Settings → Network & internet); the script warns when it's
+  Public.
+- Uninstall (in PowerShell):
+  `Unregister-ScheduledTask recall-anki-sync-server -Confirm:$false`, then
+  remove the `recall-server (Anki sync)` firewall rule (as administrator:
+  `Remove-NetFirewallRule -DisplayName 'recall-server (Anki sync)'`) and
+  delete `%USERPROFILE%\.recall-server`.
 
 ## What the binaries are
 
