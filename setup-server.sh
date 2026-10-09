@@ -6,7 +6,8 @@
 # What it does, in order:
 #   1. Downloads the anki-sync-server binary for this machine (from this
 #      repo's GitHub Releases; built by CI from ankitects/anki, AGPL-3.0).
-#   2. Generates a username/password (or keeps your existing ones).
+#   2. Asks for a username/password, defaulting to your login name and a
+#      random password (or keeps your existing ones).
 #   3. Installs a launchd agent (macOS) or systemd user unit (Linux) so the
 #      server starts at login and restarts if it stops.
 #   4. Prints the address + credentials to enter in Recall and Anki desktop.
@@ -42,14 +43,51 @@ curl -fSL --progress-bar -o "${BIN}.tmp" "$URL" || fail "download failed: $URL"
 mv "${BIN}.tmp" "$BIN"; chmod +x "$BIN"
 
 # ---- 2. credentials (kept across re-runs) ---------------------------------
+# Under `curl | sh` stdin is the script itself, so prompts read /dev/tty. With
+# no terminal (CI, provisioning), defaults or RECALL_SERVER_USER /
+# RECALL_SERVER_PASSWORD are used without asking.
+have_tty() { ( : </dev/tty ) 2>/dev/null; }
+ask() { printf '%s' "$1" >/dev/tty; IFS= read -r REPLY </dev/tty || REPLY=""; }
+ask_secret() {
+  stty -echo </dev/tty; trap 'stty echo </dev/tty' EXIT INT TERM
+  ask "$1"; stty echo </dev/tty; trap - EXIT INT TERM; printf '\n' >/dev/tty
+}
+# The server reads SYNC_USER1 as user:password and keeps each user's data in
+# a folder named after them, so ':' and '/' can't appear in a username.
+bad_user() { case "$1" in ''|*:*|*/*) return 0 ;; *) return 1 ;; esac; }
+# Single-quote a value so the sourced env file reads it back verbatim.
+shq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
 if [ -f "$ENV_FILE" ]; then
   say "Keeping your existing username/password."
 else
-  USER_NAME="${USER:-anki}"
-  PASS=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)
+  DEFAULT_USER="${USER:-anki}"
+  USER_NAME="${RECALL_SERVER_USER:-}"
+  PASS="${RECALL_SERVER_PASSWORD:-}"
+  if [ -n "$USER_NAME" ]; then
+    bad_user "$USER_NAME" && fail "RECALL_SERVER_USER can't contain ':' or '/'."
+  elif have_tty; then
+    while :; do
+      ask "Username [${DEFAULT_USER}]: "; USER_NAME="${REPLY:-$DEFAULT_USER}"
+      bad_user "$USER_NAME" || break
+      say "  A username can't contain ':' or '/'." >/dev/tty
+    done
+  else
+    USER_NAME="$DEFAULT_USER"
+  fi
+  if [ -z "$PASS" ] && [ -z "${RECALL_SERVER_USER:-}" ] && have_tty; then
+    while :; do
+      ask_secret "Password (Enter for a random one): "; PASS="$REPLY"
+      [ -n "$PASS" ] || break
+      ask_secret "Confirm password: "
+      [ "$REPLY" = "$PASS" ] && break
+      say "  Those didn't match; try again." >/dev/tty
+    done
+  fi
+  [ -n "$PASS" ] || PASS=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)
   {
-    echo "SYNC_USER1=${USER_NAME}:${PASS}"
-    echo "SYNC_BASE=${DATA_DIR}"
+    echo "SYNC_USER1=$(shq "${USER_NAME}:${PASS}")"
+    echo "SYNC_BASE=$(shq "$DATA_DIR")"
     echo "SYNC_HOST=0.0.0.0"
     echo "SYNC_PORT=${PORT}"
   } > "$ENV_FILE"

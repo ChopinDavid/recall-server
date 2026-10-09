@@ -11,14 +11,23 @@ curl -fsSL https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setu
 ```
 
 That downloads a prebuilt `anki-sync-server` binary for your machine,
-generates credentials, installs it to start at login (launchd on macOS,
-systemd user unit on Linux), starts it, and prints the address, username,
-and password to enter in your apps. Re-running upgrades in place and keeps
-your credentials and data.
+asks for a username and password, installs it to start at login (launchd on
+macOS, systemd user unit on Linux), starts it, and prints the address,
+username, and password to enter in your apps. Press Enter at either prompt
+to accept the default: your computer's login name, and a random 16-character
+password. Re-running upgrades in place and keeps your credentials and data.
 
 - Data: `~/.recall-server/data` — back it up like any Anki data.
 - Log: `~/.recall-server/server.log`
 - Change the port: `RECALL_SERVER_PORT=27701 sh setup-server.sh`
+- Set credentials without prompts (first run only):
+  `RECALL_SERVER_USER=alice RECALL_SERVER_PASSWORD=... sh setup-server.sh`.
+  With no terminal attached (CI, provisioning), the script skips the prompts
+  and uses these or the defaults.
+- Change credentials later: edit `SYNC_USER1=` in
+  `~/.recall-server/server-env`, or delete that file and re-run. Data is
+  stored per username, so a new username starts empty until you sync from
+  Anki desktop.
 - Uninstall: remove `~/.recall-server` and the
   `com.recall.anki-sync-server` LaunchAgent / `recall-anki-sync-server`
   systemd unit.
