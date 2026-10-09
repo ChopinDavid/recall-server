@@ -24,18 +24,43 @@ jobs:
             asset: anki-sync-server-linux-x86_64
           - os: ubuntu-24.04-arm
             asset: anki-sync-server-linux-arm64
+          - os: windows-latest
+            asset: anki-sync-server-windows-x86_64.exe
+          - os: windows-11-arm
+            asset: anki-sync-server-windows-arm64.exe
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install protoc (anki's build generates protobuf code)
+        if: runner.os != 'Windows'
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then brew install protobuf
           else sudo apt-get update && sudo apt-get install -y protobuf-compiler; fi
+      - name: Install protoc (Windows)
+        if: runner.os == 'Windows'
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Allow long paths (Windows)
+        if: runner.os == 'Windows'
+        run: git config --global core.longpaths true
       - name: Build from ankitects/anki @ ${{ env.ANKI_TAG }}
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: |
           cargo install --root out --git https://github.com/ankitects/anki.git \
             --tag "${{ env.ANKI_TAG }}" anki-sync-server
-          mv out/bin/anki-sync-server "${{ matrix.asset }}"
+          if [ "$RUNNER_OS" = "Windows" ]; then mv out/bin/anki-sync-server.exe "${{ matrix.asset }}"
+          else mv out/bin/anki-sync-server "${{ matrix.asset }}"; fi
+      # Kept on every run, so a manual (workflow_dispatch) build can be
+      # attached to an existing release without re-tagging.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
