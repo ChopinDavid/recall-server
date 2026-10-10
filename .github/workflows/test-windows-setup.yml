@@ -1,15 +1,17 @@
 # Runs setup-server.ps1 end to end on Windows (non-interactively, via the
 # RECALL_SERVER_USER / RECALL_SERVER_PASSWORD overrides) and checks that the
-# server answers, the Scheduled Task and firewall rule exist, and a re-run
-# keeps the credentials. Uses the binary from the latest release.
+# server answers, the Startup shortcut and firewall rule exist, and a re-run
+# keeps the credentials, both as an administrator and as a standard user.
+# Uses the binary from the latest release.
 name: test-windows-setup
 on:
   push:
     paths: ["setup-server.ps1", ".github/workflows/test-windows-setup.yml"]
   workflow_dispatch:
 jobs:
-  test:
+  admin:
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Parse check
@@ -39,7 +41,45 @@ jobs:
           if ($first -notmatch [regex]::Escape('Password:       it''s $HOME "q" a:b=c')) { throw 'password not preserved' }
           if ($second -notmatch 'Keeping your existing username/password') { throw 're-run did not keep credentials' }
           if ($second -notmatch 'Username:       ci-user') { throw 're-run changed the username' }
-          Get-ScheduledTask -TaskName recall-anki-sync-server | Format-List TaskName, State
+          if ($first -match 'while running:') { throw 'first run hit an error' }
+          $lnk = Join-Path ([Environment]::GetFolderPath('Startup')) 'recall-server.lnk'
+          if (-not (Test-Path $lnk)) { throw 'Startup shortcut missing' }
           Get-NetFirewallRule -DisplayName 'recall-server (Anki sync)' | Format-List DisplayName, Enabled, Profile
           try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8080/ | Out-Null } catch { if (-not $_.Exception.Response) { throw 'server not reachable' } }
           Get-Content "$env:USERPROFILE\.recall-server\server.log" -Tail 20
+
+  # Most people aren't administrators. Run the setup as a fresh standard user
+  # (the firewall rule is pre-created, since its UAC prompt can't be answered
+  # in CI) and check it completes without admin rights.
+  standard-user:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run setup as a standard user
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pw = 'Rs!' + [guid]::NewGuid().ToString('N').Substring(0, 16) + 'aA1'
+          $sec = ConvertTo-SecureString $pw -AsPlainText -Force
+          New-LocalUser -Name rstest -Password $sec -PasswordNeverExpires | Out-Null
+          Add-LocalGroupMember -Group Users -Member rstest
+          New-NetFirewallRule -DisplayName 'recall-server (Anki sync)' -Direction Inbound -Action Allow -Protocol TCP `
+            -LocalPort 18081 -Program 'C:\Users\rstest\.recall-server\anki-sync-server.exe' -Profile Private | Out-Null
+          New-Item -ItemType Directory C:\rs | Out-Null
+          Copy-Item setup-server.ps1 C:\rs\
+          icacls C:\rs /grant 'Everyone:(OI)(CI)M' | Out-Null
+          $cmd = "`$env:RECALL_SERVER_PORT='18081'; `$env:RECALL_SERVER_USER='std'; `$env:RECALL_SERVER_PASSWORD='pw'; " +
+                 "Get-Content -Raw C:\rs\setup-server.ps1 | iex *> C:\rs\out.txt"
+          $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
+          $cred = New-Object System.Management.Automation.PSCredential('rstest', $sec)
+          $p = Start-Process powershell.exe -Credential $cred -LoadUserProfile -Wait -PassThru `
+            -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $enc"
+          $out = Get-Content -Raw C:\rs\out.txt
+          $out
+          if ($out -match 'while running:|setup-server:') { throw 'setup failed as a standard user' }
+          if ($out -notmatch 'Your Anki sync server is set up') { throw 'setup did not finish' }
+          if ($out -match 'NOTE: the server has not answered') { throw 'server did not answer' }
+          if (-not (Test-Path 'C:\Users\rstest\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\recall-server.lnk')) { throw 'Startup shortcut missing' }
+          try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18081/ | Out-Null } catch { if (-not $_.Exception.Response) { throw 'server not reachable' } }
+          'standard-user setup OK'

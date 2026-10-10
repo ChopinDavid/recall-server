@@ -9,8 +9,8 @@
 #      random password (or keeps your existing ones).
 #   3. Allows the server through Windows Firewall on private networks (one
 #      administrator prompt), so your phone can reach it.
-#   4. Registers a Scheduled Task so the server starts at login and restarts
-#      if it stops.
+#   4. Adds a shortcut to your Startup folder so the server starts (hidden) at
+#      login, and restarts it if it stops. No administrator rights needed.
 #   5. Prints the address + credentials to enter in Recall and Anki desktop.
 #
 # Re-running is safe: it upgrades the binary and keeps credentials + data.
@@ -30,7 +30,8 @@ $EnvFile  = Join-Path $HomeDir 'server-env'
 $DataDir  = Join-Path $HomeDir 'data'
 $LogFile  = Join-Path $HomeDir 'server.log'
 $Runner   = Join-Path $HomeDir 'run-server.ps1'
-$TaskName = 'recall-anki-sync-server'
+$Shortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'recall-server.lnk'
+$OldTask  = 'recall-anki-sync-server'   # used by an earlier version of this script
 $RuleName = 'recall-server (Anki sync)'
 $Port     = if ($env:RECALL_SERVER_PORT) { $env:RECALL_SERVER_PORT } else { '8080' }
 
@@ -53,12 +54,17 @@ try {
   New-Item -ItemType Directory -Force -Path $HomeDir, $DataDir | Out-Null
 
   # A running server locks its .exe, so stop it (and its restart loop) first.
-  Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-  Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -and $_.CommandLine.Contains($Runner) } |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-  Get-Process -Name 'anki-sync-server' -ErrorAction SilentlyContinue |
-    Where-Object { $_.Path -eq $Bin } | Stop-Process -Force -ErrorAction SilentlyContinue
+  # Best effort: none of this is needed on a first run.
+  try { Stop-ScheduledTask -TaskName $OldTask -ErrorAction SilentlyContinue } catch { }
+  try {
+    Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" -ErrorAction SilentlyContinue |
+      Where-Object { $_.CommandLine -and $_.CommandLine.Contains($Runner) } |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  } catch { }
+  try {
+    Get-Process -Name 'anki-sync-server' -ErrorAction SilentlyContinue |
+      Where-Object { $_.Path -eq $Bin } | Stop-Process -Force -ErrorAction SilentlyContinue
+  } catch { }
   Start-Sleep -Milliseconds 500
 
   Say "Downloading the sync server ($Asset)..."
@@ -167,7 +173,7 @@ try {
   # run-server.ps1 loads server-env into its own environment and keeps the
   # server running; cmd appends the server's output to server.log.
   [IO.File]::WriteAllLines($Runner, [string[]]@(
-    '# Started at login by the recall-anki-sync-server Scheduled Task.',
+    '# Started at login by the recall-server shortcut in your Startup folder.',
     'foreach ($line in [IO.File]::ReadAllLines((Join-Path $PSScriptRoot ''server-env''))) {',
     '  $i = $line.IndexOf(''='')',
     '  if ($i -gt 0) { [Environment]::SetEnvironmentVariable($line.Substring(0, $i), $line.Substring($i + 1), ''Process'') }',
@@ -180,17 +186,19 @@ try {
     '}'
   ))
 
-  $Me = "$env:USERDOMAIN\$env:USERNAME"
-  $Action = New-ScheduledTaskAction -Execute 'powershell.exe' `
-    -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Runner`""
-  $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $Me
-  $Principal = New-ScheduledTaskPrincipal -UserId $Me -LogonType Interactive -RunLevel Limited
-  $TaskSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
-    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
-    -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew
-  Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Principal $Principal `
-    -Settings $TaskSettings -Description 'Personal Anki sync server (recall-server)' -Force | Out-Null
-  Start-ScheduledTask -TaskName $TaskName
+  # Registering a Scheduled Task that runs at logon needs administrator
+  # rights, so start from the per-user Startup folder instead.
+  try { Unregister-ScheduledTask -TaskName $OldTask -Confirm:$false -ErrorAction SilentlyContinue } catch { }
+  $PowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+  $RunnerArgs = "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Runner`""
+  $Link = (New-Object -ComObject WScript.Shell).CreateShortcut($Shortcut)
+  $Link.TargetPath = $PowerShell
+  $Link.Arguments = $RunnerArgs
+  $Link.WorkingDirectory = $HomeDir
+  $Link.WindowStyle = 7   # minimized, so nothing flashes up at login
+  $Link.Description = 'Personal Anki sync server (recall-server)'
+  $Link.Save()
+  Start-Process -FilePath $PowerShell -ArgumentList $RunnerArgs -WindowStyle Hidden
 
   # ---- 5. verify + print the card ------------------------------------------
   # The address the PHONE should use: the interface carrying the default route.
@@ -243,5 +251,9 @@ try {
 } catch {
   Write-Host ""
   Write-Host $_.Exception.Message -ForegroundColor Red
+  # Name the failing step, so a bare "Access is denied." can be traced.
+  if ($_.Exception.Message -notlike 'setup-server:*' -and $_.InvocationInfo -and $_.InvocationInfo.Line) {
+    Write-Host ("  while running: " + $_.InvocationInfo.Line.Trim()) -ForegroundColor Red
+  }
 }
 }

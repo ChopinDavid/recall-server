@@ -50,8 +50,9 @@ only; it doesn't change any setting.
 
 ### Windows details
 
-- Runs as the `recall-anki-sync-server` Scheduled Task (at login, restarted
-  if it stops).
+- Starts at login from a `recall-server` shortcut in your Startup folder
+  (in a hidden window, no administrator rights needed) and restarts the
+  server if it stops.
 - Data: `%USERPROFILE%\.recall-server\data` — back it up like any Anki data.
 - Log: `%USERPROFILE%\.recall-server\server.log`
 - Change the port or set credentials without prompts: set
@@ -62,11 +63,11 @@ only; it doesn't change any setting.
 - If your phone can't connect, check that Windows treats your network as
   **Private** (Settings → Network & internet); the script warns when it's
   Public.
-- Uninstall (in PowerShell):
-  `Unregister-ScheduledTask recall-anki-sync-server -Confirm:$false`, then
-  remove the `recall-server (Anki sync)` firewall rule (as administrator:
-  `Remove-NetFirewallRule -DisplayName 'recall-server (Anki sync)'`) and
-  delete `%USERPROFILE%\.recall-server`.
+- Uninstall: delete `recall-server` from your Startup folder (Win+R,
+  `shell:startup`), sign out and back in (or end `anki-sync-server` in Task
+  Manager), delete `%USERPROFILE%\.recall-server`, and remove the firewall
+  rule in PowerShell as administrator:
+  `Remove-NetFirewallRule -DisplayName 'recall-server (Anki sync)'`.
 
 ## What the binaries are
 
