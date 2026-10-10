@@ -73,8 +73,11 @@ jobs:
                  "Get-Content -Raw C:\rs\setup-server.ps1 | iex *> C:\rs\out.txt"
           $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
           $cred = New-Object System.Management.Automation.PSCredential('rstest', $sec)
-          $p = Start-Process powershell.exe -Credential $cred -LoadUserProfile -Wait -PassThru `
+          # Not -Wait: in Windows PowerShell that also waits for the server the
+          # setup leaves running. Wait for the setup process alone.
+          $p = Start-Process powershell.exe -Credential $cred -LoadUserProfile -PassThru `
             -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $enc"
+          if (-not $p.WaitForExit(300000)) { throw 'setup did not exit within 5 minutes' }
           $out = Get-Content -Raw C:\rs\out.txt
           $out
           if ($out -match 'while running:|setup-server:') { throw 'setup failed as a standard user' }
