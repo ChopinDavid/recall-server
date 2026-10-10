@@ -1,8 +1,10 @@
 # recall-server setup for Windows - puts a personal Anki sync server on this computer.
 #
-#   powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setup-server.ps1 | iex"
+#   curl -fsSL -o "%TEMP%\recall-setup.ps1" https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setup-server.ps1 && powershell -ExecutionPolicy Bypass -File "%TEMP%\recall-setup.ps1"
 #
-# Works from Command Prompt or PowerShell. What it does, in order:
+# (in Command Prompt). It's downloaded to a file and run from there: piping it
+# straight into Invoke-Expression gets blocked by Microsoft Defender as
+# malware-like. What it does, in order:
 #   1. Downloads the anki-sync-server binary for this machine (from this
 #      repo's GitHub Releases; built by CI from ankitects/anki, AGPL-3.0).
 #   2. Asks for a username/password, defaulting to your login name and a
@@ -146,9 +148,16 @@ try {
   # ---- 3. firewall: let the phone reach the server -------------------------
   # Scoped to this program, this port and Private networks. Adding a rule
   # needs administrator rights, hence one UAC prompt (skipped when it exists).
-  $FwCommand = "Get-NetFirewallRule -DisplayName '$RuleName' -ErrorAction SilentlyContinue | Remove-NetFirewallRule; " +
-    "New-NetFirewallRule -DisplayName '$RuleName' -Direction Inbound -Action Allow -Protocol TCP " +
-    "-LocalPort $Port -Program '$($Bin.Replace("'", "''"))' -Profile Private | Out-Null"
+  # The elevated step runs a small, readable script file (not an encoded
+  # command, which security software treats as suspicious).
+  $FwScript = Join-Path $HomeDir 'allow-firewall.ps1'
+  [IO.File]::WriteAllLines($FwScript, [string[]]@(
+    '# Lets your phone reach the recall-server Anki sync server on private networks.',
+    '$ErrorActionPreference = ''Stop''',
+    "Get-NetFirewallRule -DisplayName '$RuleName' -ErrorAction SilentlyContinue | Remove-NetFirewallRule",
+    "New-NetFirewallRule -DisplayName '$RuleName' -Direction Inbound -Action Allow -Protocol TCP ``",
+    "  -LocalPort $Port -Program '$($Bin.Replace("'", "''"))' -Profile Private | Out-Null"
+  ))
   $FwOk = $false
   try {
     $rule = Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -162,12 +171,11 @@ try {
     $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     try {
       if ($IsAdmin) {
-        Invoke-Expression $FwCommand
+        & $FwScript
       } else {
         Say "Windows will ask for permission to let your phone reach the server..."
-        $Encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($FwCommand))
-        $p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru -WindowStyle Hidden `
-          -ArgumentList "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $Encoded"
+        $p = Start-Process powershell.exe -Verb RunAs -Wait -PassThru `
+          -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$FwScript`""
         if ($p.ExitCode -ne 0) { throw "exit $($p.ExitCode)" }
       }
       $FwOk = $true
@@ -245,8 +253,8 @@ try {
   if (-not $FwOk) {
     Say ""
     Say "   NOTE: Windows Firewall wasn't updated, so your phone may not reach"
-    Say "   the server. To allow it, run this in PowerShell as administrator:"
-    Say "     $FwCommand"
+    Say "   the server. To allow it, run this in Command Prompt as administrator:"
+    Say "     powershell -ExecutionPolicy Bypass -File `"$FwScript`""
   }
   if ($Category -eq 'Public') {
     Say ""

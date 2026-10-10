@@ -12,10 +12,10 @@ sync protocol).
 curl -fsSL https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setup-server.sh | sh
 ```
 
-**Windows** — paste into Command Prompt or PowerShell:
+**Windows** — paste into Command Prompt (not PowerShell):
 
 ```bat
-powershell -ExecutionPolicy Bypass -c "irm https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setup-server.ps1 | iex"
+curl -fsSL -o "%TEMP%\recall-setup.ps1" https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setup-server.ps1 && powershell -ExecutionPolicy Bypass -File "%TEMP%\recall-setup.ps1"
 ```
 
 Either one downloads a prebuilt `anki-sync-server` binary for your machine,
@@ -28,7 +28,9 @@ your credentials and data.
 On Windows, the script also asks once for administrator permission to let
 the server through Windows Firewall (on private networks only), so your
 phone can reach it. `-ExecutionPolicy Bypass` applies to that one command
-only; it doesn't change any setting.
+only; it doesn't change any setting. The script is downloaded to a file and
+run from there, because Microsoft Defender blocks the shorter
+`irm … | iex` style of one-liner as malware-like.
 
 ### macOS / Linux details
 

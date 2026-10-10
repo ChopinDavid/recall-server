@@ -25,12 +25,12 @@ jobs:
         env:
           RECALL_SERVER_USER: ci-user
           RECALL_SERVER_PASSWORD: "it's $HOME \"q\" a:b=c"
-        run: powershell -ExecutionPolicy Bypass -c "Get-Content -Raw setup-server.ps1 | iex" > first.txt & type first.txt
+        run: powershell -ExecutionPolicy Bypass -File setup-server.ps1 > first.txt & type first.txt
       - name: Re-run keeps credentials
         shell: cmd
         env:
           RECALL_SERVER_USER: someone-else
-        run: powershell -ExecutionPolicy Bypass -c "Get-Content -Raw setup-server.ps1 | iex" > second.txt & type second.txt
+        run: powershell -ExecutionPolicy Bypass -File setup-server.ps1 > second.txt & type second.txt
       - name: Verify
         shell: powershell
         run: |
@@ -70,7 +70,7 @@ jobs:
           Copy-Item setup-server.ps1 C:\rs\
           icacls C:\rs /grant 'Everyone:(OI)(CI)M' | Out-Null
           $cmd = "`$env:RECALL_SERVER_PORT='18081'; `$env:RECALL_SERVER_USER='std'; `$env:RECALL_SERVER_PASSWORD='pw'; " +
-                 "Get-Content -Raw C:\rs\setup-server.ps1 | iex *> C:\rs\out.txt"
+                 "& C:\rs\setup-server.ps1 *> C:\rs\out.txt"
           $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
           $cred = New-Object System.Management.Automation.PSCredential('rstest', $sec)
           # Not -Wait: in Windows PowerShell that also waits for the server the
