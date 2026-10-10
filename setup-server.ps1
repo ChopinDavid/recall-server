@@ -30,7 +30,6 @@ $EnvFile  = Join-Path $HomeDir 'server-env'
 $DataDir  = Join-Path $HomeDir 'data'
 $LogFile  = Join-Path $HomeDir 'server.log'
 $Runner   = Join-Path $HomeDir 'run-server.ps1'
-$Shortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'recall-server.lnk'
 $OldTask  = 'recall-anki-sync-server'   # used by an earlier version of this script
 $RuleName = 'recall-server (Anki sync)'
 $Port     = if ($env:RECALL_SERVER_PORT) { $env:RECALL_SERVER_PORT } else { '8080' }
@@ -39,6 +38,12 @@ function Say([string]$m) { Write-Host $m }
 function Fail([string]$m) { throw "setup-server: $m" }
 
 try {
+  # Some sign-in types don't report the Startup folder; its default location
+  # under %APPDATA% is the same one Windows uses.
+  $StartupDir = [Environment]::GetFolderPath('Startup')
+  if (-not $StartupDir) { $StartupDir = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup' }
+  $Shortcut = Join-Path $StartupDir 'recall-server.lnk'
+
   if ($Port -notmatch '^\d+$' -or [int]$Port -lt 1 -or [int]$Port -gt 65535) { Fail "RECALL_SERVER_PORT must be a number from 1 to 65535." }
 
   # ---- 1. platform + latest release asset ---------------------------------
@@ -191,6 +196,7 @@ try {
   try { Unregister-ScheduledTask -TaskName $OldTask -Confirm:$false -ErrorAction SilentlyContinue } catch { }
   $PowerShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
   $RunnerArgs = "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$Runner`""
+  New-Item -ItemType Directory -Force -Path $StartupDir | Out-Null
   $Link = (New-Object -ComObject WScript.Shell).CreateShortcut($Shortcut)
   $Link.TargetPath = $PowerShell
   $Link.Arguments = $RunnerArgs
