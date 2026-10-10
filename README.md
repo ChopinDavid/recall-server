@@ -6,6 +6,11 @@ the self-hosting companion to
 Anki self-hoster (AnkiDroid, desktop-to-desktop, anything that speaks Anki's
 sync protocol).
 
+**Setup walkthrough** — the one-line setup on a Mac, then syncing Anki desktop
+and [Recall](https://github.com/ChopinDavid/recall-lightos) to the new server:
+
+https://github.com/user-attachments/assets/506ab75a-e39a-4a2e-b835-bd8b0d09bd6f
+
 **macOS / Linux** — paste into the Terminal app:
 
 ```sh
