@@ -1,6 +1,7 @@
 # Builds anki-sync-server from ankitects/anki (AGPL-3.0) and attaches the
-# binaries to a GitHub Release. Trigger: push a tag matching the anki version
-# being built (e.g. 26.09.2), with ANKI_TAG below kept in step.
+# binaries to a GitHub Release. Trigger: push a recall-server version tag
+# (e.g. v1.0.0). ANKI_TAG below is the Anki version built; it is independent
+# of the tag and named in the release title.
 name: build
 on:
   push:
@@ -64,4 +65,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
+          name: recall-server ${{ github.ref_name }} (Anki sync server ${{ env.ANKI_TAG }})
           files: ${{ matrix.asset }}

@@ -79,11 +79,11 @@ run from there, because Microsoft Defender blocks the shorter
 ## What the binaries are
 
 Unmodified `anki-sync-server`, compiled by [this repo's CI](.github/workflows/build.yml)
-from [ankitects/anki](https://github.com/ankitects/anki) at the tag named in
+from [ankitects/anki](https://github.com/ankitects/anki) at the Anki version named in
 each release. No patches. Not affiliated with Anki/Ankitects.
 
 ## License
 
 The binaries are built from Anki, which is **AGPL-3.0**; their complete
-corresponding source is the pinned tag of ankitects/anki named in each
-release. The setup script and workflow in this repo are MIT.
+corresponding source is the ankitects/anki tag for the Anki version named in
+each release. The setup scripts and workflows in this repo are MIT.
