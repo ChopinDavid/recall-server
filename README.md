@@ -1,24 +1,24 @@
 # recall-server
 
-One-line setup for a personal [Anki](https://apps.ankiweb.net/) sync server —
+One-line setup for a personal [Anki](https://apps.ankiweb.net/) sync server,
 the self-hosting companion to
 [Recall](https://github.com/ChopinDavid/recall-lightos), and usable by any
 Anki self-hoster (AnkiDroid, desktop-to-desktop, anything that speaks Anki's
 sync protocol).
 
-**macOS / Linux** — paste into the Terminal app:
+**macOS / Linux**, paste into the Terminal app:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setup-server.sh | sh
 ```
 
-**Windows** — paste into Command Prompt (not PowerShell):
+**Windows**, paste into Command Prompt (not PowerShell):
 
 ```bat
 curl -fsSL -o "%TEMP%\recall-setup.ps1" https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setup-server.ps1 && powershell -ExecutionPolicy Bypass -File "%TEMP%\recall-setup.ps1"
 ```
 
-**Setup walkthrough** — the one-line setup on a Mac, then syncing Anki desktop
+**Setup walkthrough**, the one-line setup on a Mac, then syncing Anki desktop
 and [Recall](https://github.com/ChopinDavid/recall-lightos) to the new server:
 
 https://github.com/user-attachments/assets/506ab75a-e39a-4a2e-b835-bd8b0d09bd6f
