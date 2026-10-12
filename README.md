@@ -6,11 +6,6 @@ the self-hosting companion to
 Anki self-hoster (AnkiDroid, desktop-to-desktop, anything that speaks Anki's
 sync protocol).
 
-**Setup walkthrough** — the one-line setup on a Mac, then syncing Anki desktop
-and [Recall](https://github.com/ChopinDavid/recall-lightos) to the new server:
-
-https://github.com/user-attachments/assets/506ab75a-e39a-4a2e-b835-bd8b0d09bd6f
-
 **macOS / Linux** — paste into the Terminal app:
 
 ```sh
@@ -23,7 +18,12 @@ curl -fsSL https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setu
 curl -fsSL -o "%TEMP%\recall-setup.ps1" https://raw.githubusercontent.com/ChopinDavid/recall-server/main/setup-server.ps1 && powershell -ExecutionPolicy Bypass -File "%TEMP%\recall-setup.ps1"
 ```
 
-Either one downloads a prebuilt `anki-sync-server` binary for your machine,
+**Setup walkthrough** — the one-line setup on a Mac, then syncing Anki desktop
+and [Recall](https://github.com/ChopinDavid/recall-lightos) to the new server:
+
+https://github.com/user-attachments/assets/506ab75a-e39a-4a2e-b835-bd8b0d09bd6f
+
+Either command downloads a prebuilt `anki-sync-server` binary for your machine,
 asks for a username and password, installs it to start at login, starts it,
 and prints the address, username, and password to enter in your apps. Press
 Enter at either prompt to accept the default: your computer's login name,
